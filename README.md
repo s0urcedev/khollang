@@ -17,7 +17,7 @@ python3 main.py code.txt limits.json
 Additionally, this ***main.py*** you can compress in an executable, if needed
 
 ### Online
-You can access an online [**Khollang Interpreter**](https://khollang.s0urcedev.pp.ua)
+You can access an online [**Khollang Interpreter**](https://khollang-interpreter.s0urcedev.pp.ua)
 
 ## Syntax
 
@@ -281,7 +281,7 @@ output F.C // "Value"
 
 ## Limits and limits files
 
-One of key features **khollang** is an ability to limit different parts of its functionality. It can be done by either providing a limits file locally or inserting limits online in an [interpreter](https://khollang.s0urcedev.pp.ua).
+One of key features **khollang** is an ability to limit different parts of its functionality. It can be done by either providing a limits file locally or inserting limits online in an [interpreter](https://khollang-interpreter.s0urcedev.pp.ua).
 
 ### Local limits file
 Local limits file can be either a JSON file or a text file. If it is JSON it has to follow this format:
@@ -305,7 +305,7 @@ limit2: value2 // integer or null
 Name of possible limits is listed further in this chapter.
 
 ### Online limits
-In an [online interpreter](https://khollang.s0urcedev.pp.ua) there is an ability to insert limits. It can be done either by providing a limits file (the same as local file) or insert them in a text format directly
+In an [online interpreter](https://khollang-interpreter.s0urcedev.pp.ua) there is an ability to insert limits. It can be done either by providing a limits file (the same as local file) or insert them in a text format directly
 
 ### Available limits
 * variables
