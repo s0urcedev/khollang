@@ -286,7 +286,7 @@ One of key features **khollang** is an ability to limit different parts of its f
 ### Local limits file
 Local limits file can be either a JSON file or a text file. If it is JSON it has to follow this format:
 
-```json
+```
 {
     "limit1": value1, // integer or null
     "limit2": value2, // integer or null,
@@ -296,7 +296,7 @@ Local limits file can be either a JSON file or a text file. If it is JSON it has
 
 If it is a text file it has to follow this format:
 
-```txt
+```
 limit1: value1 // integer or null
 limit2: value2 // integer or null
 ...
