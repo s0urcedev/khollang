@@ -1,0 +1,709 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Khollang Interpreter</title>
+    <style>
+        /* TextareaDecorator.css
+        * written by Colin Kuebler 2012
+        * Part of LDT, dual licensed under GPLv3 and MIT
+        * Provides styles for rendering a textarea on top of a pre with scrollbars
+        */
+
+        /* settings you can play with */
+
+        .ldt, .ldt label {
+            padding: 0;
+        }
+
+        .ldt, .ldt pre, .ldt textarea {
+            width: 100%;
+            font-size: 25px !important;
+            /* resize algorithm depends on a monospaced font */
+            font-family: monospace !important;
+        }
+
+        .ldt textarea {
+            /* hide the text but show the text caret */
+            color: transparent;
+            line-height: 30px;
+            /* Firefox caret position is slow to update when color is transparent */
+            color: rgba(0, 0, 0, 0.004);
+            caret-color: #8198b1;
+        }
+
+        /* settings you shouldn't play with unless you have a good reason */
+
+        .ldt {
+            overflow: auto;
+            position: relative;
+        }
+
+        .ldt pre {
+            margin: 0;
+            overflow: initial;
+        }
+
+        .ldt label {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: inline;
+            box-sizing: border-box;
+            -moz-box-sizing: border-box;
+            -webkit-box-sizing: border-box;
+            cursor: text;
+        }
+
+        .ldt textarea {
+            margin: 0;
+            padding: 0;
+            border: 0;
+            background: 0;
+            outline: none;
+            resize: none;
+            min-width: 100%;
+            min-height: 100%;
+            overflow: hidden;
+            /* IE doesn't support rgba textarea, so use vendor specific alpha filter */
+            filter: alpha(opacity = 20);
+        }
+    </style>
+    <style>
+        .ldt .comment { color: #7f848e; }
+        .ldt .string { color: #98c379; }
+        .ldt .values { color: #c99563; }
+        .ldt .keyword { color: #c678dd; }
+        .ldt .defined { color: #61afef; }
+        .ldt .method { color: #61afef; }
+        .ldt .datatype { color: #e2c07b; }
+        .ldt .variable { color: #e06c75; }
+        .ldt .operator { color: #56b6c2; }
+        .ldt .other { color: #8198b1; }
+    
+        body {
+            background-color: #767676;
+            padding: 10px;
+        }
+
+        .editor {
+            font-family: monospace;
+            font-size: 25px;
+            line-height: 30px;
+            background-color: #232323;
+            border-radius: 10px;
+            padding-top: 20px;
+            padding-left: 20px;
+        }
+
+        .header {
+            color: #767676;
+            font-size: 30px;
+        }
+
+        .code-editor {
+            margin-top: 5px;
+            display: inline-flex;
+            width: 100%;
+            padding-bottom: 20px;
+        }
+
+        .std-editor {
+            margin-top: 5px;
+            width: 100%;
+        }
+
+        .line-numbers {
+            width: 20px;
+            text-align: right;
+        }
+
+        .line-numbers span {
+            counter-increment: linenumber;
+        }
+
+        .line-numbers span::before {
+            content: counter(linenumber);
+            display: block;
+            color: #767676;
+        }
+
+        .code {
+            width: 100%;
+            line-height: 30px;
+            font-size: 25px;
+            overflow-y: hidden;
+            padding: 0;
+            border: 0;
+            background-color: #232323;
+            outline: none;
+            resize: none;
+        }
+
+        #input {
+            width: 100%;
+            line-height: 30px;
+            font-size: 25px;
+            overflow-y: hidden;
+            padding: 0;
+            border: 0;
+            background-color: #232323;
+            color: #767676;
+            outline: none;
+            resize: none;
+        }
+
+        #output {
+            width: 100%;
+            line-height: 30px;
+            font-size: 25px;
+            overflow-y: hidden;
+            padding: 0;
+            border: 0;
+            background-color: #232323;
+            color: #767676;
+            outline: none;
+            resize: none;
+        }
+
+        #limits {
+            width: 100%;
+            line-height: 30px;
+            font-size: 25px;
+            overflow-y: hidden;
+            padding: 0;
+            border: 0;
+            background-color: #232323;
+            color: #767676;
+            outline: none;
+            resize: none;
+        }
+
+        #limitsFile {
+            line-height: 30px;
+            font-size: 22px;
+            font-family: monospace;
+            color: #767676;
+            font-weight: bold;
+        }
+
+        #limitsFile::file-selector-button {
+            color: #232323;
+            background-color: #767676;
+            font-weight: bold;
+        }
+
+        #run {
+            display: block;
+            width: 100px;
+            height: 50px;
+            margin: auto;
+            margin-top: 20px;
+            font-size: 30px;
+            overflow-y: hidden;
+            padding: 0;
+            border: 0;
+            border-radius: 10px;
+            background-color: #232323;
+            color: #767676;
+            outline: none;
+        }
+
+        #run:hover {
+            opacity: 80%;
+        }
+
+        a {
+            color: #232323;
+            text-decoration: none;
+        }
+
+        .link {
+            display: inline-block;
+            color: #232323;
+            font-size: 30px;
+            text-decoration: underline;
+            font-family: monospace;
+            margin-bottom: 20px;
+        }
+
+        .footer {
+            display: block;
+            font-family: monospace;
+            font-size: 25px;
+            line-height: 30px;
+            border-radius: 10px;
+            color: #232323;
+            text-align: center;
+            margin-top: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="editor" style="width: calc(100% - 20px);">
+        <span class="header"><b>Code:</b></span>
+        <div class="code-editor">
+            <div class="line-numbers">
+                <span></span>
+            </div>
+            <textarea id="code" class="code" name="code" spellcheck="false"></textarea>
+        </div>
+    </div>
+    <div style="display: inline-flex; width: 100%; margin-top: 20px;">
+        <div class="editor" style="width: 33%;">
+            <span class="header"><b>Input:</b></span>
+            <div class="std-editor">
+                <textarea id="input" name="input" spellcheck="false"></textarea>
+            </div>
+        </div>
+        <div class="editor" style="width: 33%; margin-left: 20px;">
+            <span class="header"><b>Output:</b></span>
+            <div class="std-editor">
+                <textarea id="output" name="output" spellcheck="false" readonly></textarea>
+            </div>
+        </div>
+        <div class="editor" style="width: 33%; margin-left: 20px;">
+            <span class="header"><b>Limits:</b></span><br>
+            <input type="file" id="limitsFile" accept="text/plain, application/json">
+            <div class="std-editor">
+                <textarea id="limits" name="limits" spellcheck="false"></textarea>
+            </div>
+        </div>
+    </div>
+    <button id="run" onclick="run()"><b>Run</b></button>
+    <span class="footer"><a href="https://github.com/s0urcedev/kholland"><b>Khollang Interpreter</b></a> by <a href="https://github.com/s0urcedev"><b>s0urcedev</b></a></span>
+    <script>
+        /* Parser.js
+        * written by Colin Kuebler 2012
+        * Part of LDT, dual licensed under GPLv3 and MIT
+        * Generates a tokenizer from regular expressions for TextareaDecorator
+        */
+
+        // Edited by s0urcedev
+
+        function Parser( rules, i ){
+            /* INIT */
+            var api = this;
+
+            // variables used internally
+            var i = i ? 'i' : '';
+            var parseRE = null;
+            var ruleSrc = [];
+            var ruleMap = {};
+
+            api.add = function( rules ){
+                for( var rule in rules ){
+                    var s = rules[rule].source;
+                    var f = rules[rule].flags;
+                    ruleSrc.push( s );
+                    ruleMap[rule] = new RegExp('^('+s+')$', f );
+                }
+                parseRE = new RegExp( ruleSrc.join('|'), 'g'+i );
+            };
+            api.tokenize = function(input){
+                return input.match(parseRE);
+            };
+            api.identify = function(token){
+                for( var rule in ruleMap ){
+                    if( ruleMap[rule].test(token) ){
+                        return rule;
+                    }
+                }
+            };
+
+            api.add( rules );
+
+            return api;
+        };
+    </script>
+    <script>
+        /* TextareaDecorator.js
+        * written by Colin Kuebler 2012
+        * Part of LDT, dual licensed under GPLv3 and MIT
+        * Builds and maintains a styled output layer under a textarea input layer
+        */
+
+        function TextareaDecorator( textarea, parser ){
+            /* INIT */
+            var api = this;
+
+            // construct editor DOM
+            var parent = document.createElement("div");
+            var output = document.createElement("pre");
+            parent.appendChild(output);
+            var label = document.createElement("label");
+            parent.appendChild(label);
+            // replace the textarea with RTA DOM and reattach on label
+            textarea.parentNode.replaceChild( parent, textarea );
+            label.appendChild(textarea);
+            // transfer the CSS styles to our editor
+            parent.className = 'ldt ' + textarea.className;
+            textarea.className = '';
+            // turn off built-in spellchecking in firefox
+            textarea.spellcheck = false;
+            // turn off word wrap
+            textarea.wrap = "off";
+
+            // coloring algorithm
+            var color = function( input, output, parser ){
+                var oldTokens = output.childNodes;
+                var newTokens = parser.tokenize(input);
+                var firstDiff, lastDiffNew, lastDiffOld;
+                // find the first difference
+                for( firstDiff = 0; firstDiff < newTokens.length && firstDiff < oldTokens.length; firstDiff++ )
+                    if( newTokens[firstDiff] !== oldTokens[firstDiff].textContent ) break;
+                // trim the length of output nodes to the size of the input
+                while( newTokens.length < oldTokens.length )
+                    output.removeChild(oldTokens[firstDiff]);
+                // find the last difference
+                for( lastDiffNew = newTokens.length-1, lastDiffOld = oldTokens.length-1; firstDiff < lastDiffOld; lastDiffNew--, lastDiffOld-- )
+                    if( newTokens[lastDiffNew] !== oldTokens[lastDiffOld].textContent ) break;
+                // update modified spans
+                for( ; firstDiff <= lastDiffOld; firstDiff++ ){
+                    oldTokens[firstDiff].className = parser.identify(newTokens[firstDiff]);
+                    oldTokens[firstDiff].textContent = oldTokens[firstDiff].innerText = newTokens[firstDiff];
+                }
+                // add in modified spans
+                for( var insertionPt = oldTokens[firstDiff] || null; firstDiff <= lastDiffNew; firstDiff++ ){
+                    var span = document.createElement("span");
+                    span.className = parser.identify(newTokens[firstDiff]);
+                    span.textContent = span.innerText = newTokens[firstDiff];
+                    output.insertBefore( span, insertionPt );
+                }
+            };
+
+            api.input = textarea;
+            api.output = output;
+            api.update = function(){
+                var input = textarea.value;
+                if( input ){
+                    color( input, output, parser );
+                    // determine the best size for the textarea
+                    var lines = input.split('\n');
+                    // find the number of columns
+                    var maxlen = 0, curlen;
+                    for( var i = 0; i < lines.length; i++ ){
+                        // calculate the width of each tab
+                        var tabLength = 0, offset = -1;
+                        while( (offset = lines[i].indexOf( '\t', offset+1 )) > -1 ){
+                            tabLength += 7 - (tabLength + offset) % 8;
+                        }
+                        var curlen = lines[i].length + tabLength;
+                        // store the greatest line length thus far
+                        maxlen = maxlen > curlen ? maxlen : curlen;
+                    }
+                    textarea.cols = maxlen + 1;
+                    textarea.rows = lines.length + 2;
+                } else {
+                    // clear the display
+                    output.innerHTML = '';
+                    // reset textarea rows/cols
+                    textarea.cols = textarea.rows = 1;
+                }
+            };
+
+            // detect all changes to the textarea,
+            // including keyboard input, cut/copy/paste, drag & drop, etc
+            if( textarea.addEventListener ){
+                // standards browsers: oninput event
+                textarea.addEventListener( "input", api.update, false );
+            } else {
+                // MSIE: detect changes to the 'value' property
+                textarea.attachEvent( "onpropertychange",
+                    function(e){
+                        if( e.propertyName.toLowerCase() === 'value' ){
+                            api.update();
+                        }
+                    }
+                );
+            }
+            // initial highlighting
+            api.update();
+
+            return api;
+        };
+
+
+    </script>
+    <script>
+        let parser = new Parser({
+            whitespace: /\s+/,
+            values: /0x[\dA-Fa-f]+|-?(\d+\.?\d*|\.\d+)|#[\dA-Fa-f]{3,6}|(true|false)(?!\w|=)/,
+            comment: /\/\*([^\*]|\*[^\/])*(\*\/?)?|(\/\/|#)[^\r\n]*/,
+            string: /"(\\.|[^"\r\n])*"?|'(\\.|[^'\r\n])*'?/,
+            defined: /(input|output|create|delete)(?!\w|=)/i,
+            method: /(size|length|push|insert|pop|remove|is_empty|enqueue|dequeue|get_min|get_max|add|includes|remove_min|remove_max|remove|get_tree_by_levels|get_tree_list|get_tree_sorted|to_array)(?!\w|=)/,
+            datatype: /(number|boolean|string|lazyarrra|array|staticarray|dynamicarray|dictionary|map|stack|queue|binarytree|binarysearchtree|set|multiset)(?!\w|=)/i,
+            keyword: /(if|else|end|match|with|case|otherwise|loop|for|while|until|from|to|continue|break|then|function|procedure|return|structure)(?!\w|=)/i,
+            operator: /[\+\-\*\/=<>!,\&|%]=?|[\(\)\{\}\[\]\.\|]|(div|mod|NOT|AND|OR|XOR)(?!\w|=)/,
+            variable: /[$A-Z_a-z0-9]+/,
+            other: /\S/,
+        }, false);
+
+        document.addEventListener('keydown' , event => {
+            if (event.key.toLowerCase() === 's' && event.ctrlKey) {
+                event.preventDefault();
+            }
+        });
+
+        function calcHeight(value) {
+            let numberOfLineBreaks = value.split('\n').length;
+            let newHeight = 20 + numberOfLineBreaks * 30 + 10;
+            return newHeight;
+        }
+
+        function getTab(value, caretPosition) {
+            str = value.substring(value.substring(0, caretPosition).lastIndexOf('\n') + 1, caretPosition);
+            res = '';
+            for (let i = 0; i < str.length; i ++) {
+                if (str[i] === ' ') {
+                    res += ' ';
+                } else {
+                    break;
+                }
+            }
+            return res
+        }
+
+        HTMLTextAreaElement.prototype.getCaretPosition = function () {
+            return this.selectionStart;
+        };
+
+        HTMLTextAreaElement.prototype.setCaretPosition = function (position) {
+            this.selectionStart = position;
+            this.selectionEnd = position;
+            this.focus();
+        };
+
+        HTMLTextAreaElement.prototype.hasSelection = function () {
+            if (this.selectionStart == this.selectionEnd) {
+                return false;
+            } else {
+                return true;
+            }
+        };
+
+        HTMLTextAreaElement.prototype.getSelectedText = function () {
+            return this.value.substring(this.selectionStart, this.selectionEnd);
+        };
+
+        HTMLTextAreaElement.prototype.setSelection = function (start, end) {
+            this.selectionStart = start;
+            this.selectionEnd = end;
+            this.focus();
+        };
+
+        const codeTextarea = document.getElementById('code');
+        const inputTextarea = document.getElementById('input');
+        const outputTextarea = document.getElementById('output');
+        const limitsTextarea = document.getElementById('limits');
+        const limitsFile = document.getElementById('limitsFile');
+        const editor = document.querySelector('.code-editor');
+        const lineNumbers = document.querySelector('.line-numbers');
+        if (localStorage.getItem('code') !== null) {
+            codeTextarea.value = localStorage.getItem('code');
+            codeTextarea.style.height = calcHeight(codeTextarea.value) + 'px';
+            const numberOfLines = codeTextarea.value.split('\n').length;
+            editor.style.gap = String(numberOfLines).length * 10 + 'px';
+            lineNumbers.innerHTML = Array(numberOfLines)
+                .fill('<span></span>')
+                .join('');
+        } 
+        if (localStorage.getItem('input') !== null) {
+            inputTextarea.value = localStorage.getItem('input');
+            inputTextarea.style.height = calcHeight(inputTextarea.value) + 'px';
+        }
+        if (localStorage.getItem('limits') !== null) {
+            limitsTextarea.value = localStorage.getItem('limits');
+            limitsTextarea.style.height = calcHeight(limitsTextarea.value) + 'px';
+        }
+        
+        let codeHighlight;
+        window.onload = function() {
+            codeHighlight = new TextareaDecorator(document.getElementById('code'), parser);
+            codeHighlight.update();
+        }
+
+        codeTextarea.onkeyup = function (event) {
+            const numberOfLines = codeTextarea.value.split('\n').length;
+            localStorage.setItem('code', codeTextarea.value);
+            codeTextarea.style.height = calcHeight(codeTextarea.value) + 'px';
+            editor.style.gap = String(numberOfLines).length * 10 + 'px';
+            lineNumbers.innerHTML = Array(numberOfLines)
+                .fill('<span></span>')
+                .join('');
+        }
+
+        codeTextarea.onkeydown = function (event) {
+            if (event.keyCode == 13) {
+                let newCaretPosition = codeTextarea.getCaretPosition() + 1 + getTab(codeTextarea.value, codeTextarea.getCaretPosition()).length;
+                codeTextarea.value = codeTextarea.value.substring(0, codeTextarea.getCaretPosition()) + '\n' + getTab(codeTextarea.value, codeTextarea.getCaretPosition()) + codeTextarea.value.substring(codeTextarea.getCaretPosition(), codeTextarea.value.length);
+                codeHighlight.update();
+                codeTextarea.setCaretPosition(newCaretPosition);
+                return false;
+            }
+            if (event.keyCode == 9) {
+                let newCaretPosition = codeTextarea.getCaretPosition() + '    '.length;
+                codeTextarea.value = codeTextarea.value.substring(0, codeTextarea.getCaretPosition()) + '    ' + codeTextarea.value.substring(codeTextarea.getCaretPosition(), codeTextarea.value.length);
+                codeHighlight.update();
+                codeTextarea.setCaretPosition(newCaretPosition);
+                return false;
+            }
+            if(event.keyCode == 8) {
+                if (codeTextarea.value.substring(codeTextarea.getCaretPosition() - 4, codeTextarea.getCaretPosition()) == '    ') {
+                    let newCaretPosition = codeTextarea.getCaretPosition() - 3;
+                    codeTextarea.value = codeTextarea.value.substring(0, codeTextarea.getCaretPosition() - 3) + codeTextarea.value.substring(codeTextarea.getCaretPosition(), codeTextarea.value.length);
+                    codeHighlight.update();
+                    codeTextarea.setCaretPosition(newCaretPosition);
+                }
+            }
+            if(event.keyCode == 37) {
+                if (codeTextarea.value.substring(codeTextarea.getCaretPosition() - 4, codeTextarea.getCaretPosition()) == '    ') {
+                    let newCaretPosition = codeTextarea.getCaretPosition() - 3;
+                    codeTextarea.setCaretPosition(newCaretPosition);
+                }    
+            }
+            if(event.keyCode == 39) {
+                if (codeTextarea.value.substring(codeTextarea.getCaretPosition() + 4, codeTextarea.getCaretPosition()) == '    ') {
+                    let newCaretPosition = codeTextarea.getCaretPosition() + 3;
+                    codeTextarea.setCaretPosition(newCaretPosition);
+                }
+            } 
+        }
+
+        inputTextarea.onkeyup = function (event) {
+            localStorage.setItem('input', inputTextarea.value);
+            inputTextarea.style.height = calcHeight(inputTextarea.value) + 'px';
+        }
+
+        inputTextarea.onkeydown = function (event) {
+            if (event.keyCode == 13) {
+                let newCaretPosition = inputTextarea.getCaretPosition() + 1 + getTab(inputTextarea.value, inputTextarea.getCaretPosition()).length;
+                inputTextarea.value = inputTextarea.value.substring(0, inputTextarea.getCaretPosition()) + '\n' + getTab(inputTextarea.value, inputTextarea.getCaretPosition()) + inputTextarea.value.substring(inputTextarea.getCaretPosition(), inputTextarea.value.length);
+                inputTextarea.setCaretPosition(newCaretPosition);
+                return false;
+            }
+            if (event.keyCode == 9) {
+                let newCaretPosition = inputTextarea.getCaretPosition() + '    '.length;
+                inputTextarea.value = inputTextarea.value.substring(0, inputTextarea.getCaretPosition()) + '    ' + inputTextarea.value.substring(inputTextarea.getCaretPosition(), inputTextarea.value.length);
+                inputTextarea.setCaretPosition(newCaretPosition);
+                return false;
+            }
+            if(event.keyCode == 8) {
+                if (inputTextarea.value.substring(inputTextarea.getCaretPosition() - 4, inputTextarea.getCaretPosition()) == '    ') {
+                    let newCaretPosition = inputTextarea.getCaretPosition() - 3;
+                    inputTextarea.value = inputTextarea.value.substring(0, inputTextarea.getCaretPosition() - 3) + inputTextarea.value.substring(inputTextarea.getCaretPosition(), inputTextarea.value.length);
+                    inputTextarea.setCaretPosition(newCaretPosition);
+                }
+            }
+            if(event.keyCode == 37) {
+                if (inputTextarea.value.substring(inputTextarea.getCaretPosition() - 4, inputTextarea.getCaretPosition()) == '    ') {
+                    let newCaretPosition = inputTextarea.getCaretPosition() - 3;
+                    inputTextarea.setCaretPosition(newCaretPosition);
+                }    
+            }
+            if(event.keyCode == 39) {
+                if (inputTextarea.value.substring(inputTextarea.getCaretPosition() + 4, inputTextarea.getCaretPosition()) == '    ') {
+                    let newCaretPosition = inputTextarea.getCaretPosition() + 3;
+                    inputTextarea.setCaretPosition(newCaretPosition);
+                }
+            } 
+        }
+
+        limitsTextarea.onkeyup = function (event) {
+            localStorage.setItem('limits', limitsTextarea.value);
+            limitsTextarea.style.height = calcHeight(limitsTextarea.value) + 'px';
+        }
+
+        limitsTextarea.onkeydown = function (event) {
+            if (event.keyCode == 13) {
+                let newCaretPosition = limitsTextarea.getCaretPosition() + 1 + getTab(limitsTextarea.value, limitsTextarea.getCaretPosition()).length;
+                limitsTextarea.value = limitsTextarea.value.substring(0, limitsTextarea.getCaretPosition()) + '\n' + getTab(limitsTextarea.value, limitsTextarea.getCaretPosition()) + limitsTextarea.value.substring(limitsTextarea.getCaretPosition(), limitsTextarea.value.length);
+                limitsTextarea.setCaretPosition(newCaretPosition);
+                return false;
+            }
+            if (event.keyCode == 9) {
+                let newCaretPosition = limitsTextarea.getCaretPosition() + '    '.length;
+                limitsTextarea.value = limitsTextarea.value.substring(0, limitsTextarea.getCaretPosition()) + '    ' + limitsTextarea.value.substring(limitsTextarea.getCaretPosition(), limitsTextarea.value.length);
+                limitsTextarea.setCaretPosition(newCaretPosition);
+                return false;
+            }
+            if(event.keyCode == 8) {
+                if (limitsTextarea.value.substring(limitsTextarea.getCaretPosition() - 4, limitsTextarea.getCaretPosition()) == '    ') {
+                    let newCaretPosition = limitsTextarea.getCaretPosition() - 3;
+                    limitsTextarea.value = limitsTextarea.value.substring(0, limitsTextarea.getCaretPosition() - 3) + limitsTextarea.value.substring(limitsTextarea.getCaretPosition(), limitsTextarea.value.length);
+                    limitsTextarea.setCaretPosition(newCaretPosition);
+                }
+            }
+            if(event.keyCode == 37) {
+                if (limitsTextarea.value.substring(limitsTextarea.getCaretPosition() - 4, limitsTextarea.getCaretPosition()) == '    ') {
+                    let newCaretPosition = limitsTextarea.getCaretPosition() - 3;
+                    limitsTextarea.setCaretPosition(newCaretPosition);
+                }    
+            }
+            if(event.keyCode == 39) {
+                if (limitsTextarea.value.substring(limitsTextarea.getCaretPosition() + 4, limitsTextarea.getCaretPosition()) == '    ') {
+                    let newCaretPosition = limitsTextarea.getCaretPosition() + 3;
+                    limitsTextarea.setCaretPosition(newCaretPosition);
+                }
+            } 
+        }
+
+        limitsFile.addEventListener('change', function selectedFileChanged() {
+            const reader = new FileReader();
+            const file = limitsFile.files[0];
+            reader.addEventListener("load", () => { 
+                if (file.type === "application/json") {
+                    let json = JSON.parse(reader.result);
+                    let result = "";
+                    for (let limit in json) {
+                        result += limit + ": " + json[limit] + "\n";
+                    }
+                    limitsTextarea.value = result;
+                    limitsTextarea.style.height = calcHeight(limitsTextarea.value) + 'px';
+                    localStorage.setItem('limits', limitsTextarea.value);
+                } else {
+                    limitsTextarea.value = reader.result;
+                    limitsTextarea.style.height = calcHeight(limitsTextarea.value) + 'px';
+                    localStorage.setItem('limits', limitsTextarea.value)
+                }
+            }, false);
+            if (file) {
+                reader.readAsText(file);
+            }
+        });
+
+        function run() {
+            outputTextarea.value = '';
+            outputTextarea.style.height = calcHeight(outputTextarea.value) + 'px';
+            let limits = {};
+            for (let limit of limitsTextarea.value.split('\n')) {
+                if (limit === '') continue;
+                const [key, value] = limit.split(':');
+                if (key === undefined || value === undefined) {
+                    alert('Invalid limit format');
+                    return;
+                }
+                if (value === 'null') limits[key] = null;
+                else limits[key] = parseInt(value);
+            }
+            fetch('/', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    code: codeTextarea.value,
+                    input: inputTextarea.value,
+                    limits: limits
+                })
+            }).then(res => res.json()).then(data => {
+                outputTextarea.value = data['output'];
+                outputTextarea.style.height = calcHeight(outputTextarea.value) + 'px';
+            });
+        }
+    </script>
+</body>
+</html>
