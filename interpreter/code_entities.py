@@ -174,9 +174,9 @@ class Condition:
         self.read_only: list[dict[str, Any]] = read_only
         self.read_write: dict[str, Any] = read_write
         self.conditions: list[str] = [ct[ct.lower().find("if") + 2:] for ct in conditions_text]
-        self.if_blocks: list[Block] = [Block(bt, self.read_only, self.read_write) for bt in if_blocks_text]
+        self.if_blocks: list[Block] = [Block(self.limits, bt, self.read_only, self.read_write) for bt in if_blocks_text]
         if else_block_text != "":
-            self.else_block: Block | None = Block(else_block_text, self.read_only, self.read_write)
+            self.else_block: Block | None = Block(self.limits, else_block_text, self.read_only, self.read_write)
         else:
             self.else_block: Block | None = None
         self.limits.change_limit_by_name("if_statements", -1)
@@ -200,9 +200,9 @@ class Match:
         self.read_only: list[dict[str, Any]] = read_only
         self.read_write: dict[str, Any] = read_write
         self.cases: list[str] = [adapt_condition(f"({match_text[match_text.lower().find('match') + 5:]}) = ({ct[ct.lower().find('case') + 4:]})") for ct in cases_text]
-        self.case_blocks: list[Block] = [Block(bt, self.read_only, self.read_write) for bt in cases_blocks_text]
+        self.case_blocks: list[Block] = [Block(self.limits, bt, self.read_only, self.read_write) for bt in cases_blocks_text]
         if otherwise_block_text != "":
-            self.otherwise_block: Block | None = Block(otherwise_block_text, self.read_only, self.read_write)
+            self.otherwise_block: Block | None = Block(self.limits, otherwise_block_text, self.read_only, self.read_write)
         else:
             self.otherwise_block: Block | None = None
         self.limits.change_limit_by_name("match_statements", -1)
@@ -245,7 +245,7 @@ class Loop:
             self.limits.change_limit_by_name("while_loop_statements", -1)
             self.type: str = "while"
             self.condition: str = condition[condition.lower().find("loop") + 4:]
-        self.block: Block = Block(block, self.read_only, self.read_write)
+        self.block: Block = Block(self.limits, block, self.read_only, self.read_write)
 
     def execute(self) -> None:
         if self.type == "while":
@@ -298,7 +298,7 @@ class Function:
         self.limits.change_limit_by_name("functions_and_procedures", -1)
 
     def execute(self, *args: list[Any]) -> Any | None:
-        return Block(self.block_text, self.read_only, dict(zip(self.arguments, args))).execute()
+        return Block(self.limits, self.block_text, self.read_only, dict(zip(self.arguments, args))).execute()
 
 class Procedure(Function):
 
@@ -309,7 +309,7 @@ class Procedure(Function):
         self.limits.change_limit_by_name("procedures", -1)
 
     def execute(self, *args: list[Any]) -> None:
-        Block(self.block_text, self.read_only, dict(zip(self.arguments, args))).execute()
+        Block(self.limits, self.block_text, self.read_only, dict(zip(self.arguments, args))).execute()
 
 class Structure:
 
@@ -552,11 +552,10 @@ class CodeInternal:
         }
         self.global_vars.update(aliases)
         self.parsing_err: str = ""
-        self.global_block: Block = Block(self.limits, code, [self.global_vars], {})
-        # try:
-        #     self.global_block: Block = Block(code, [self.global_vars], {}, limits)
-        # except Exception as exc:
-        #     self.parsing_err = str(exc).replace(" (<string>, line 1)", "")
+        try:
+            self.global_block: Block = Block(self.limits, code, [self.global_vars], {})
+        except Exception as exc:
+            self.parsing_err = str(exc).replace(" (<string>, line 1)", "")
 
     def run(self) -> str:
         if self.parsing_err == "":
