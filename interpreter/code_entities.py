@@ -2,12 +2,13 @@ from typing import Any, Callable
 from re import search, findall
 from tools import adapt_condition, adapt_expression, __bitwise_not__, printify, replace_ignore_quotes, read_only_read_write
 from data_structures import aliases, LazyArray, LazyArrayInternal, Dictionary, DictionaryInternal, CustomStructure
-from default_values import default_values
-from limits import limits
+from default_values import default_values 
+from limits import Limits
 
 class Instruction:
 
-    def __init__(self, text: str, read_only: list[dict[str, Any]] = [{}], read_write: dict[str, Any] = {}) -> None:
+    def __init__(self, limits: Limits, text: str, read_only: list[dict[str, Any]] = [{}], read_write: dict[str, Any] = {}) -> None:
+        self.limits = limits
         self.read_only: list[dict[str, Any]] = read_only
         self.read_write: dict[str, Any] = read_write
         self.INSTRUCTIONS: dict[str, Callable[[], None]] = {
@@ -18,7 +19,7 @@ class Instruction:
             "delete": self.delete,
             "run": self.run
         }
-        limits.change_limit_by_name("instructions", -1)
+        self.limits.change_limit_by_name("instructions", -1)
         instruction: str = text[:text.find(" ")]
         if instruction.lower() in self.INSTRUCTIONS:
             self.instruction: str = instruction.lower()
@@ -126,35 +127,35 @@ class Instruction:
         else:
             index = variable_indexes[-1]
         if index in variable_structure:
-            limits.change_limit_by_name("variables", 1)
-            limits.change_limit_by_value(variable_structure[index], 1)
+            self.limits.change_limit_by_name("variables", 1)
+            self.limits.change_limit_by_value(variable_structure[index], 1)
         value: Any
         if value_not_string:
             value = self.content[1]
         else:
             value = eval(adapt_expression(self.content[1]), read_only_read_write(self.read_only, self.read_write))
-        limits.change_limit_by_name("variables", -1)
-        limits.change_limit_by_value(value, -1)
+        self.limits.change_limit_by_name("variables", -1)
+        self.limits.change_limit_by_value(value, -1)
         variable_structure[index] = value
 
     def create(self) -> None:
         data_type: str = self.content[0][:self.content[0].find(" ")].strip()
         if self.content[0][self.content[0].find(" ") + 1:].strip() not in self.read_write:
-            limits.change_limit_by_name("variables", -1)
+            self.limits.change_limit_by_name("variables", -1)
         else:
-            limits.change_limit_by_value(self.read_write[self.content[0][self.content[0].find(" ") + 1:].strip()], 1)
+            self.limits.change_limit_by_value(self.read_write[self.content[0][self.content[0].find(" ") + 1:].strip()], 1)
         if data_type.lower() in default_values:
             self.read_write[self.content[0][self.content[0].find(" ") + 1:].strip()] = default_values[data_type.lower()]
-            limits.change_limit_by_value(default_values[data_type.lower()], -1)
+            self.limits.change_limit_by_value(default_values[data_type.lower()], -1)
         elif data_type in read_only_read_write(self.read_only, self.read_write) and callable(read_only_read_write(self.read_only, self.read_write)[data_type]) and isinstance(read_only_read_write(self.read_only, self.read_write)[data_type](), CustomStructure):
             self.read_write[self.content[0][self.content[0].find(" ") + 1:].strip()] = read_only_read_write(self.read_only, self.read_write)[data_type]()
-            limits.change_limit_by_value(read_only_read_write(self.read_only, self.read_write)[data_type](), -1)
+            self.limits.change_limit_by_value(read_only_read_write(self.read_only, self.read_write)[data_type](), -1)
         else:
             raise Exception("Invalid data type")
 
     def delete(self) -> None:
-        limits.change_limit_by_name("variables", 1)
-        limits.change_limit_by_value(self.read_write[self.content[0]], 1)
+        self.limits.change_limit_by_name("variables", 1)
+        self.limits.change_limit_by_value(self.read_write[self.content[0]], 1)
         del self.read_write[self.content[0]]
 
     def run(self) -> None:
@@ -168,7 +169,8 @@ class Instruction:
 
 class Condition:
 
-    def __init__(self, conditions_text: list[str], if_blocks_text: list[str], else_block_text: str = "", read_only: list[dict[str, Any]] = [{}], read_write: dict[str, Any] = {}) -> None:
+    def __init__(self, limits: Limits, conditions_text: list[str], if_blocks_text: list[str], else_block_text: str = "", read_only: list[dict[str, Any]] = [{}], read_write: dict[str, Any] = {}) -> None:
+        self.limits = limits
         self.read_only: list[dict[str, Any]] = read_only
         self.read_write: dict[str, Any] = read_write
         self.conditions: list[str] = [ct[ct.lower().find("if") + 2:] for ct in conditions_text]
@@ -177,8 +179,8 @@ class Condition:
             self.else_block: Block | None = Block(else_block_text, self.read_only, self.read_write)
         else:
             self.else_block: Block | None = None
-        limits.change_limit_by_name("if_statements", -1)
-        limits.change_limit_by_name("condition_statements", -1)
+        self.limits.change_limit_by_name("if_statements", -1)
+        self.limits.change_limit_by_name("condition_statements", -1)
 
     def execute(self) -> Any | None:
         for i in range(0, len(self.conditions)):
@@ -193,7 +195,8 @@ class Condition:
 
 class Match:
 
-    def __init__(self, match_text: str, cases_text: list[str], cases_blocks_text: list[str], otherwise_block_text: str = "", read_only: list[dict[str, Any]] = [{}], read_write: dict[str, Any] = {}) -> None:
+    def __init__(self, limits: Limits, match_text: str, cases_text: list[str], cases_blocks_text: list[str], otherwise_block_text: str = "", read_only: list[dict[str, Any]] = [{}], read_write: dict[str, Any] = {}) -> None:
+        self.limits = limits
         self.read_only: list[dict[str, Any]] = read_only
         self.read_write: dict[str, Any] = read_write
         self.cases: list[str] = [adapt_condition(f"({match_text[match_text.lower().find('match') + 5:]}) = ({ct[ct.lower().find('case') + 4:]})") for ct in cases_text]
@@ -202,8 +205,8 @@ class Match:
             self.otherwise_block: Block | None = Block(otherwise_block_text, self.read_only, self.read_write)
         else:
             self.otherwise_block: Block | None = None
-        limits.change_limit_by_name("match_statements", -1)
-        limits.change_limit_by_name("condition_statements", -1)
+        self.limits.change_limit_by_name("match_statements", -1)
+        self.limits.change_limit_by_name("condition_statements", -1)
 
     def execute(self) -> Any | None:
         for i in range(0, len(self.cases)):
@@ -218,27 +221,28 @@ class Match:
 
 class Loop:
 
-    def __init__(self, condition: str, block: str, read_only: list[dict[str, Any]] = [{}], read_write: dict[str, Any] = {}) -> None:
+    def __init__(self, limits: Limits, condition: str, block: str, read_only: list[dict[str, Any]] = [{}], read_write: dict[str, Any] = {}) -> None:
+        self.limits = limits
         self.read_only: list[dict[str, Any]] = read_only
         self.read_write: dict[str, Any] = read_write
-        limits.change_limit_by_name("loop_statements", -1)
+        self.limits.change_limit_by_name("loop_statements", -1)
         if "while" in condition.lower():
-            limits.change_limit_by_name("while_loop_statements", -1)
+            self.limits.change_limit_by_name("while_loop_statements", -1)
             self.type: str = "while"
             self.condition: str = condition[condition.lower().find("while") + 5:]
         elif "until" in condition.lower():
-            limits.change_limit_by_name("until_loop_statements", -1)
+            self.limits.change_limit_by_name("until_loop_statements", -1)
             self.type: str = "until"
             self.condition: str = condition[condition.lower().find("until") + 5:]
         elif "from" in condition.lower() and "to" in condition.lower():
-            limits.change_limit_by_name("for_loop_statements", -1)
+            self.limits.change_limit_by_name("for_loop_statements", -1)
             self.type = "for"
-            self.start_instruction: Instruction = Instruction(f"{condition[condition.lower().find('loop') + 4:condition.lower().find('to')]}".replace("from", "="), self.read_only, self.read_write)
-            self.iter_instruction: Instruction = Instruction(f"{condition[condition.lower().find('loop') + 4:condition.lower().find('from') - 1]} = {condition[condition.lower().find('loop') + 4:condition.lower().find('from') - 1]} + 1", self.read_only, self.read_write)
-            self.end_instruction: Instruction = Instruction(f"delete {condition[condition.lower().find('loop') + 4:condition.lower().find('from') - 1]}", self.read_only, self.read_write)
+            self.start_instruction: Instruction = Instruction(self.limits, f"{condition[condition.lower().find('loop') + 4:condition.lower().find('to')]}".replace("from", "="), self.read_only, self.read_write)
+            self.iter_instruction: Instruction = Instruction(self.limits, f"{condition[condition.lower().find('loop') + 4:condition.lower().find('from') - 1]} = {condition[condition.lower().find('loop') + 4:condition.lower().find('from') - 1]} + 1", self.read_only, self.read_write)
+            self.end_instruction: Instruction = Instruction(self.limits, f"delete {condition[condition.lower().find('loop') + 4:condition.lower().find('from') - 1]}", self.read_only, self.read_write)
             self.condition: str = f"{condition[condition.lower().find('loop') + 4:condition.lower().find('from')]} <= {condition[condition.lower().find('to') + 2:]}"
         else:
-            limits.change_limit_by_name("while_loop_statements", -1)
+            self.limits.change_limit_by_name("while_loop_statements", -1)
             self.type: str = "while"
             self.condition: str = condition[condition.lower().find("loop") + 4:]
         self.block: Block = Block(block, self.read_only, self.read_write)
@@ -283,37 +287,40 @@ class Loop:
 
 class Function:
 
-    def __init__(self, statement: str, block_text: str, read_only: list[dict[str, Any]] = [{}]) -> None:
+    def __init__(self, limits: Limits, statement: str, block_text: str, read_only: list[dict[str, Any]] = [{}]) -> None:
+        self.limits = limits
         self.read_only: list[dict[str, Any]] = read_only
         statement_list: list[str] = findall(r"(\w+)", statement)
         self.name: str = statement_list[1]
         self.arguments: list[str] = statement_list[2:]
         self.block_text: str = block_text
-        limits.change_limit_by_name("functions", -1)
-        limits.change_limit_by_name("functions_and_procedures", -1)
+        self.limits.change_limit_by_name("functions", -1)
+        self.limits.change_limit_by_name("functions_and_procedures", -1)
 
     def execute(self, *args: list[Any]) -> Any | None:
         return Block(self.block_text, self.read_only, dict(zip(self.arguments, args))).execute()
 
 class Procedure(Function):
 
-    def __init__(self, statement: str, block_text: str, read_only: list[dict[str, Any]] = [{}]) -> None:
+    def __init__(self, limits: Limits, statement: str, block_text: str, read_only: list[dict[str, Any]] = [{}]) -> None:
+        self.limits = limits
         super().__init__(statement, block_text, read_only)
-        limits.change_limit_by_name("functions", 1)
-        limits.change_limit_by_name("procedures", -1)
+        self.limits.change_limit_by_name("functions", 1)
+        self.limits.change_limit_by_name("procedures", -1)
 
     def execute(self, *args: list[Any]) -> None:
         Block(self.block_text, self.read_only, dict(zip(self.arguments, args))).execute()
 
 class Structure:
 
-    def __init__(self, name: str, block: list[str], read_only: list[dict[str, Any]] = [{}], read_write: dict[str, Any] = {}) -> None:
+    def __init__(self, limits: Limits, name: str, block: list[str], read_only: list[dict[str, Any]] = [{}], read_write: dict[str, Any] = {}) -> None:
+        self.limits = limits
         self.name: str = name
         self.block: list[block] = block
         self.read_only: list[dict[str, Any]] = read_only
         self.read_write: dict[str, Any] = read_write
         self.read_write[name] = lambda *args: CustomStructure([], [], *args)
-        limits.change_limit_by_name("custom_structure_definitions", -1)
+        self.limits.change_limit_by_name("custom_structure_definitions", -1)
         
     def execute(self) -> None:
         attr_names: list[str] = []
@@ -342,7 +349,8 @@ class Structure:
 
 class Block:
 
-    def __init__(self, text: str, read_only: list[dict[str, Any]] = [{}], read_write: dict[str, Any] = {}) -> None:
+    def __init__(self, limits: Limits, text: str, read_only: list[dict[str, Any]] = [{}], read_write: dict[str, Any] = {}) -> None:
+        self.limits = limits
         self.read_only: list[dict[str, Any]] = read_only
         self.read_write: dict[str, Any] = read_write
         self.code: list[Instruction | Condition | Match | Loop] = []
@@ -366,7 +374,7 @@ class Block:
             if search(r"^[^a-zA-Z0-9\[\]{}()+\-*/_\"\']*//", line.strip()):
                 continue
             elif search(r"^[^a-zA-Z0-9\[\]{}()+\-*/_\"\']*end structure[^a-zA-Z0-9\[\]{}()+\-*/_\"\']*$", line.lower()) and state == "structure":
-                self.code.append(Structure(current_statement, current_block, self.read_only, self.read_write))
+                self.code.append(Structure(self.limits, current_statement, current_block, self.read_only, self.read_write))
                 current_statement = ""
                 current_block = []
                 state = ""
@@ -376,7 +384,7 @@ class Block:
             elif state == "structure":
                 current_block.append(line.strip())
             elif search(r"^[^a-zA-Z0-9\[\]{}()+\-*/_\"\']*end procedure[^a-zA-Z0-9\[\]{}()+\-*/_\"\']*$", line.lower()) and state == "procedure" and state_difference == 0:
-                self.read_write[findall(r"(\w+)", current_statement)[1]] = Procedure(current_statement, "\n".join(current_block), self.read_only + [self.read_write]).execute
+                self.read_write[findall(r"(\w+)", current_statement)[1]] = Procedure(self.limits, current_statement, "\n".join(current_block), self.read_only + [self.read_write]).execute
                 current_statement = ""
                 current_block = []
                 state = ""
@@ -390,7 +398,7 @@ class Block:
                     state_difference += 1
                 current_block.append(line)
             elif search(r"^[^a-zA-Z0-9\[\]{}()+\-*/_\"\']*end function[^a-zA-Z0-9\[\]{}()+\-*/_\"\']*$", line.lower()) and state == "function" and state_difference == 0:
-                self.read_write[findall(r"(\w+)", current_statement)[1]] = Function(current_statement, "\n".join(current_block), self.read_only + [self.read_write]).execute
+                self.read_write[findall(r"(\w+)", current_statement)[1]] = Function(self.limits, current_statement, "\n".join(current_block), self.read_only + [self.read_write]).execute
                 current_statement = ""
                 current_block = []
                 state = ""
@@ -404,7 +412,7 @@ class Block:
                     state_difference += 1
                 current_block.append(line)
             elif search(r"^[^a-zA-Z0-9\[\]{}()+\-*/_\"\']*end loop[^a-zA-Z0-9\[\]{}()+\-*/_\"\']*$", line.lower()) and state == "loop" and state_difference == 0:
-                self.code.append(Loop(current_statement, "\n".join(current_block), self.read_only, self.read_write))
+                self.code.append(Loop(self.limits, current_statement, "\n".join(current_block), self.read_only, self.read_write))
                 current_statement = ""
                 current_block = []
                 state = ""
@@ -419,7 +427,7 @@ class Block:
                 current_block.append(line)
             elif search(r"^[^a-zA-Z0-9\[\]{}()+\-*/_\"\']*end if[^a-zA-Z0-9\[\]{}()+\-*/_\"\']*$", line.lower()) and (state == "if" or state == "else") and state_difference == 0:
                 if_case_blocks.append("\n".join(current_if_case_block))
-                self.code.append(Condition(if_case_conditions, if_case_blocks, "\n".join(current_else_otherwise_block), self.read_only, self.read_write))
+                self.code.append(Condition(self.limits, if_case_conditions, if_case_blocks, "\n".join(current_else_otherwise_block), self.read_only, self.read_write))
                 if_case_conditions = []
                 current_if_case_block = []
                 current_else_otherwise_block = []
@@ -452,7 +460,7 @@ class Block:
                 current_if_case_block.append(line)
             elif search(r"^[^a-zA-Z0-9\[\]{}()+\-*/_\"\']*end match[^a-zA-Z0-9\[\]{}()+\-*/_\"\']*$", line.lower()) and (state == "case" or state == "otherwise") and state_difference == 0:
                 if_case_blocks.append("\n".join(current_if_case_block))
-                self.code.append(Match(current_statement, if_case_conditions, if_case_blocks, "\n".join(current_else_otherwise_block), self.read_only, self.read_write))
+                self.code.append(Match(self.limits, current_statement, if_case_conditions, if_case_blocks, "\n".join(current_else_otherwise_block), self.read_only, self.read_write))
                 if_case_conditions = []
                 current_if_case_block = []
                 current_else_otherwise_block = []
@@ -485,7 +493,7 @@ class Block:
                     state_difference += 1
                 current_if_case_block.append(line)
             elif line.strip() != "":
-                self.code.append(Instruction(line.strip(), self.read_only, self.read_write))
+                self.code.append(Instruction(self.limits, line.strip(), self.read_only, self.read_write))
             counter += 1
         if state != "":
             raise Exception(f"Some end {state if state != 'else' else 'if'} is missed")
@@ -510,14 +518,14 @@ class Block:
 class Code:
 
     def __init__(self, code: str, limits_config: dict[str, int | None] = {}) -> None:
-        limits.apply_config(limits_config)
+        self.limits: Limits = Limits(limits_config)
         self.global_vars: dict[str, Any] = {
             "bitwise_not": __bitwise_not__,
         }
         self.global_vars.update(aliases)
         self.parsing_err: str = ""
         try:
-            self.global_block: Block = Block(code, [self.global_vars], {})
+            self.global_block: Block = Block(self.limits, code, [self.global_vars], {})
         except Exception as exc:
             self.parsing_err = str(exc).replace(" (<string>, line 1)", "")
 
@@ -536,7 +544,7 @@ class Code:
 class CodeInternal:
 
     def __init__(self, code: str, stdin: str, limits_config: dict[str, int | None]) -> None:
-        limits.apply_config(limits_config)
+        self.limits: Limits = Limits(limits_config)
         self.global_vars: dict[str, Any] = {
             "bitwise_not": __bitwise_not__,
             "__stdin__": stdin.replace("\r", "").split("\n")[::-1],
@@ -544,10 +552,11 @@ class CodeInternal:
         }
         self.global_vars.update(aliases)
         self.parsing_err: str = ""
-        try:
-            self.global_block: Block = Block(code, [self.global_vars], {})
-        except Exception as exc:
-            self.parsing_err = str(exc).replace(" (<string>, line 1)", "")
+        self.global_block: Block = Block(self.limits, code, [self.global_vars], {})
+        # try:
+        #     self.global_block: Block = Block(code, [self.global_vars], {}, limits)
+        # except Exception as exc:
+        #     self.parsing_err = str(exc).replace(" (<string>, line 1)", "")
 
     def run(self) -> str:
         if self.parsing_err == "":

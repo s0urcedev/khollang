@@ -5,12 +5,10 @@ from os import path
 
 class Limits:
 
-    def __init__(self) -> None:
+    def __init__(self, config: dict[str, int | None]) -> None:
         self.limits: dict[str, int | None] = {}
         with open(path.join(path.dirname(__file__), "default_limits.json")) as config_file:
             self.limits = load(config_file)
-
-    def apply_config(self, config: dict[str, int | None]) -> None:
         for key in config:
             self.limits[key] = config[key]
 
@@ -71,5 +69,3 @@ class Limits:
             self.limits[name] += change
             if self.limits[name] < 0:
                 raise Exception(f"You have exceeded limit for \"{name}\"")
-
-limits = Limits()

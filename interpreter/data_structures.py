@@ -1,6 +1,6 @@
 from typing import Any
 from tools import adapt_expression, adapt_output, divide_by_commas
-from limits import limits
+from limits import Limits
 
 class Array:
 
@@ -471,10 +471,11 @@ class Multiset(Set):
 
 class CustomStructure:
 
-    def __init__(self, names: list[str], default_values: list[Any], *args_values: Any) -> None:
+    def __init__(self, limits: Limits, names: list[str], default_values: list[Any], *args_values: Any) -> None:
+        self.limits = limits
         for i in range(0, len(names)):
             setattr(self, names[i], default_values[i])
-            limits.change_limit_by_value(default_values[i], -1)
+            self.limits.change_limit_by_value(default_values[i], -1)
         for i in range(0, len(args_values)):
             setattr(self, names[i], args_values[i])
 
